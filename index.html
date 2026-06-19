@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wedding Gift Registry</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="intro" aria-labelledby="page-title">
+        <div class="intro-copy">
+          <p class="kicker">Wedding Gift Registry</p>
+          <h1 id="page-title">Mithu & Atin</h1>
+          <p class="intro-text">
+            Help us begin married life with things we will use, love, and
+            remember. Choose a gift, reserve it in your name, or add a thoughtful
+            idea of your own.
+          </p>
+        </div>
+
+        <div class="event-card" aria-label="Wedding details">
+          <img src="resources/AM.jpg" alt="" aria-hidden="true" />
+          <span class="event-date">12 December 2026</span>
+          <span class="event-place">Sunahari Bagh Farm, Gurgaon</span>
+          <button class="ghost-button" id="resetDemoButton" type="button">
+            Reset Demo
+          </button>
+        </div>
+      </section>
+
+      <section class="registry-summary" aria-label="Registry summary">
+        <article>
+          <span id="availableCount">0</span>
+          <p>Available Gifts</p>
+        </article>
+        <article>
+          <span id="reservedCount">0</span>
+          <p>Reserved Gifts</p>
+        </article>
+        <article>
+          <span id="totalValue">0</span>
+          <p>Total Registry Value</p>
+        </article>
+      </section>
+
+      <section class="toolbar" aria-label="Registry controls">
+        <label class="search-box">
+          <span>Search</span>
+          <input id="searchInput" type="search" placeholder="Dinnerware, lamp, spa..." />
+        </label>
+
+        <div class="category-tabs" aria-label="Gift categories">
+          <button class="active" data-category="All" type="button">All</button>
+          <button data-category="Home" type="button">Home</button>
+          <button data-category="Kitchen" type="button">Kitchen</button>
+          <button data-category="Experiences" type="button">Experiences</button>
+          <button data-category="Decor" type="button">Decor</button>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <section aria-labelledby="registry-heading">
+          <div class="section-heading">
+            <p class="kicker">Registry</p>
+            <h2 id="registry-heading">Choose a Gift</h2>
+          </div>
+          <div class="gift-grid" id="giftGrid"></div>
+          <p class="empty-state" id="emptyState" hidden>
+            No gifts match that search yet.
+          </p>
+        </section>
+
+        <aside class="panel" aria-labelledby="add-gift-heading">
+          <div class="section-heading compact">
+            <p class="kicker">Add an Idea</p>
+            <h2 id="add-gift-heading">Suggest a Gift</h2>
+          </div>
+
+          <form id="giftForm">
+            <label>
+              Gift name
+              <input id="giftName" required type="text" placeholder="Ceramic serving bowl" />
+            </label>
+            <label>
+              Category
+              <select id="giftCategory" required>
+                <option value="Home">Home</option>
+                <option value="Kitchen">Kitchen</option>
+                <option value="Experiences">Experiences</option>
+                <option value="Decor">Decor</option>
+              </select>
+            </label>
+            <label>
+              Price
+              <input id="giftPrice" required min="1" type="number" placeholder="6500" />
+            </label>
+            <label>
+              Store or link
+              <input id="giftLink" type="text" placeholder="Store name or https://store.example/gift" />
+            </label>
+            <label>
+              Notes
+              <textarea
+                id="giftDescription"
+                rows="4"
+                placeholder="Why this would be lovely for the couple"
+              ></textarea>
+            </label>
+            <button class="primary-button" type="submit">Add Gift</button>
+          </form>
+        </aside>
+      </section>
+    </main>
+
+    <dialog id="reserveDialog">
+      <form id="reserveForm">
+        <button class="icon-button" data-action="close-reserve" aria-label="Close dialog" type="button">
+          x
+        </button>
+        <p class="kicker">Reserve Gift</p>
+        <h2 id="dialogGiftName">Gift name</h2>
+        <p id="dialogGiftDescription"></p>
+        <label>
+          Your name
+          <input id="guestName" required type="text" placeholder="Priya Sharma" />
+        </label>
+        <label>
+          Message for the couple
+          <textarea
+            id="guestMessage"
+            rows="3"
+            placeholder="Optional note with your gift"
+          ></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button class="ghost-button" data-action="close-reserve" type="button">Cancel</button>
+          <button class="primary-button" id="confirmReserveButton" value="default" type="submit">
+            Reserve Gift
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
