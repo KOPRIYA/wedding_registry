@@ -110,6 +110,7 @@ let releaseCodes = loadReleaseCodes();
 let activeCategory = "All";
 let activeGiftId = "";
 let isSyncing = false;
+let sharedStorageReady = !appConfig.apiUrl;
 
 const giftGrid = document.querySelector("#giftGrid");
 const emptyState = document.querySelector("#emptyState");
@@ -161,15 +162,17 @@ function saveReleaseCodes() {
 
 async function loadSharedGifts() {
   if (!appConfig.apiUrl) {
-    setSyncStatus("Local preview mode");
+    sharedStorageReady = true;
+    setSyncStatus("Local preview mode", "info");
     render();
     return;
   }
 
-  await runWithSyncStatus("Loading shared registry...", async () => {
+  await runWithSyncStatus("Loading shared registry...", "Google storage needs public access. Changes are not saved yet.", async () => {
     const result = await callRegistryApi("list");
     applyServerResult(result);
-    setSyncStatus("Shared registry connected");
+    sharedStorageReady = true;
+    setSyncStatus("Shared registry connected", "ok");
   });
 }
 
@@ -251,16 +254,21 @@ function applyServerResult(result) {
   }
 }
 
-async function runWithSyncStatus(label, operation) {
+async function runWithSyncStatus(label, failureMessage, operation) {
   isSyncing = true;
-  setSyncStatus(label);
+  setSyncStatus(label, "info");
   render();
 
   try {
     await operation();
   } catch (error) {
     console.error(error);
-    setSyncStatus(appConfig.apiUrl ? "Shared storage unavailable; showing saved copy" : "Local preview mode");
+    if (appConfig.apiUrl) {
+      sharedStorageReady = false;
+      setSyncStatus(failureMessage || "Shared storage unavailable; showing saved copy", "error");
+    } else {
+      setSyncStatus("Local preview mode", "info");
+    }
   } finally {
     isSyncing = false;
     render();
@@ -346,8 +354,9 @@ function updateFormState() {
   });
 }
 
-function setSyncStatus(message) {
+function setSyncStatus(message, state = "info") {
   syncStatus.textContent = message;
+  syncStatus.dataset.state = state;
 }
 
 function openReserveDialog(giftId) {
@@ -447,18 +456,25 @@ async function refreshRegistry() {
 }
 
 async function saveGiftChange(action, payload, applyLocalChange) {
-  await runWithSyncStatus("Saving registry...", async () => {
+  if (appConfig.apiUrl && !sharedStorageReady) {
+    setSyncStatus("Cannot save yet: Google storage is not public.", "error");
+    render();
+    return;
+  }
+
+  await runWithSyncStatus("Saving registry...", "Could not save. Check Google Apps Script access.", async () => {
     if (appConfig.apiUrl) {
       const result = await callRegistryApi(action, payload);
       applyServerResult(result);
-      setSyncStatus("Shared registry updated");
+      sharedStorageReady = true;
+      setSyncStatus("Shared registry updated", "ok");
       return;
     }
 
     applyLocalChange();
     gifts = normalizeGifts(gifts);
     saveLocalGifts();
-    setSyncStatus("Saved in this browser");
+    setSyncStatus("Saved in this browser", "ok");
   });
 }
 

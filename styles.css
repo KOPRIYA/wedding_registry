@@ -159,6 +159,14 @@ h2 {
   font-weight: 800;
 }
 
+.sync-status[data-state="ok"] {
+  color: #dfe9e1;
+}
+
+.sync-status[data-state="error"] {
+  color: #ffd7cf;
+}
+
 .registry-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
