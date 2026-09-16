@@ -23,9 +23,10 @@
           <img src="resources/AM.jpg" alt="" aria-hidden="true" />
           <span class="event-date">12 December 2026</span>
           <span class="event-place">Sunahari Bagh Farm, Gurgaon</span>
-          <button class="ghost-button" id="resetDemoButton" type="button">
-            Reset Demo
+          <button class="ghost-button" id="refreshButton" type="button">
+            Refresh Registry
           </button>
+          <span class="sync-status" id="syncStatus" aria-live="polite">Loading registry...</span>
         </div>
       </section>
 
@@ -142,6 +143,7 @@
       </form>
     </dialog>
 
+    <script src="config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

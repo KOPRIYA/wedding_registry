@@ -39,6 +39,14 @@ button {
   cursor: pointer;
 }
 
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .shell {
   width: min(1160px, calc(100% - 32px));
   margin: 0 auto;
@@ -143,6 +151,12 @@ h2 {
 
 .event-place {
   color: rgba(255, 253, 248, 0.78);
+}
+
+.sync-status {
+  color: rgba(255, 253, 248, 0.72);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .registry-summary {

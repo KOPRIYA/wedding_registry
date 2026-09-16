@@ -1,6 +1,6 @@
 const defaultGifts = [
   {
-    id: createId(),
+    id: "hand-thrown-dinnerware-set",
     name: "Hand-thrown dinnerware set",
     category: "Kitchen",
     price: 19999,
@@ -10,7 +10,7 @@ const defaultGifts = [
     message: "",
   },
   {
-    id: createId(),
+    id: "linen-bedding-bundle",
     name: "Linen bedding bundle",
     category: "Home",
     price: 6999,
@@ -20,7 +20,7 @@ const defaultGifts = [
     message: "",
   },
   {
-    id: createId(),
+    id: "weekend-spa-retreat",
     name: "Weekend spa retreat",
     category: "Experiences",
     price: 28332,
@@ -30,7 +30,7 @@ const defaultGifts = [
     message: "",
   },
   {
-    id: createId(),
+    id: "brass-floor-lamp",
     name: "Brass floor lamp",
     category: "Decor",
     price: 9800,
@@ -40,7 +40,7 @@ const defaultGifts = [
     message: "",
   },
   {
-    id: createId(),
+    id: "stand-mixer",
     name: "Stand mixer",
     category: "Kitchen",
     price: 6999,
@@ -50,58 +50,66 @@ const defaultGifts = [
     message: "",
   },
   {
-    id: createId(),
+    id: "dishwasher",
     name: "Dishwasher",
     category: "Home",
     price: 42990,
-    description: "So that the couple saves time",
+    description: "So that the couple saves time.",
     link: "https://www.amazon.in/Setting-Dishwasher-Intensive-Program-Pre-Rinse/dp/B07JW77MVJ/ref=sr_1_4?crid=P7ECHD6C035V&dib=eyJ2IjoiMSJ9.kwk3FnNlSg4w3jtvxq5yTePRhw581eTPCrJqKGB1T_WNB9DGWfNA7riGTk5A1KlwjX1_--KFQpwd2l7ddmaPSfdMEyIMlqXhh57P1WrBASwt7t9QTtRDPHN_unXrpvAmptENhCMgblGtI8Pva39Bbn2QaZqwzOHB1lxfMG4QeibqnRiockW-WAvI9kBT2ejtiB13OSOCx3x19eHBs3oPitPxSJFtoaLhfxovzWiM43Y.icxT94YEeNtWERfJGfQUZTPNLS7XsnD7WNyd3Nm9Xsw&dib_tag=se&keywords=dish+washer+for+home&qid=1780655341&sprefix=dish+%2Caps%2C326&sr=8-4",
     reservedBy: "",
     message: "",
   },
   {
-    id: createId(),
+    id: "coffee-machine",
     name: "Coffee Machine",
     category: "Kitchen",
     price: 19999,
-    description: "A coffee maker for the coffee lovers",
+    description: "A coffee maker for the coffee lovers.",
     link: "https://www.amazon.in/DeLonghi-Dedica-Compact-Espresso-machine/dp/B0F3S1JJ4T?ref_=ast_sto_dp&th=1",
     reservedBy: "",
     message: "",
   },
   {
-    id: createId(),
+    id: "coffee-mug-set",
     name: "Coffee Mug set",
     category: "Kitchen",
     price: 19999,
-    description: "A coffee maker for the coffee lovers",
+    description: "A handsome set for morning coffee and slow evening chai.",
     link: "https://www.homecentre.in/in/en/Tableware/Crockery/Tea-and-Coffee-Sets/HOMECENTRE-Caraway-Somber-Set-of-6-Stoneware-Cups-and-Saucers-with-Metal-Stand--220ml/p/1000015640049",
     reservedBy: "",
     message: "",
   },
   {
-    id: createId(),
+    id: "walking-pad",
     name: "Walking pad",
     category: "Home",
     price: 29999,
-    description: "So that the couple can stay fit",
+    description: "So that the couple can stay fit.",
     link: "https://www.amazon.in/Flexnest-Flexpad-Foldable-Treadmill-Bluetooth/dp/B0F6VB8Y26/ref=sr_1_2_sspa?crid=36M9ME7WR48JQ&dib=eyJ2IjoiMSJ9.ULbrOQ3WKQ__mw8Wr2-OOBO4iv_qJQ4pItgZ8YBB9-olPeKrBWrwPkvbrZuoqeCQqVbAab0KOeUWsXH_AJTj14Z4EhbcP_SDHJ8BCSacEAeIGr4qf2V1lFbRHflgABwvE6a5Cd0CnFIuFeMcRADiBDHWbaL_RKGlHj7B7VGTmSS9pAKlTj5O7c1AtMVKRVPvtvY3tmHwMOD67WjaHPVuuvLqEBv1bcp1ISqbE4g8ckw.AOXclQerCWM3W8U-uMnMqxblJhbPQMMZwbXkzAn7ZlM&dib_tag=se&keywords=walking+pad+with+incline&qid=1780682519&sprefix=walking+pad%2Caps%2C267&sr=8-2-spons&aref=yTOGaGSY3T&sp_csd=d2lkZ2V0TmFtZT1zcF9hdGY&psc=1",
     reservedBy: "",
     message: "",
-  }
-  
+  },
 ];
 
+const appConfig = {
+  apiUrl: String(globalThis.WEDDING_REGISTRY_API_URL || "").trim(),
+  adminKey: String(globalThis.WEDDING_REGISTRY_ADMIN_KEY || "").trim(),
+  transport: String(globalThis.WEDDING_REGISTRY_API_TRANSPORT || "jsonp").trim().toLowerCase(),
+};
+
 const storageKey = "wedding-gift-registry";
+const releaseCodeKey = "wedding-gift-release-codes";
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
   maximumFractionDigits: 0,
 });
 
-let gifts = loadGifts();
+let gifts = normalizeGifts(loadLocalGifts());
+let releaseCodes = loadReleaseCodes();
 let activeCategory = "All";
 let activeGiftId = "";
+let isSyncing = false;
 
 const giftGrid = document.querySelector("#giftGrid");
 const emptyState = document.querySelector("#emptyState");
@@ -110,39 +118,153 @@ const categoryTabs = document.querySelectorAll(".category-tabs button");
 const reserveDialog = document.querySelector("#reserveDialog");
 const reserveForm = document.querySelector("#reserveForm");
 const giftForm = document.querySelector("#giftForm");
+const refreshButton = document.querySelector("#refreshButton");
+const syncStatus = document.querySelector("#syncStatus");
 
-function loadGifts() {
+function loadLocalGifts() {
   const saved = localStorage.getItem(storageKey);
 
   if (!saved) {
-    return normalizeGifts(defaultGifts);
+    return defaultGifts;
   }
 
   try {
     const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? normalizeGifts(parsed) : normalizeGifts(defaultGifts);
+    return Array.isArray(parsed) ? parsed : defaultGifts;
   } catch {
-    return normalizeGifts(defaultGifts);
+    return defaultGifts;
   }
 }
 
-function saveGifts() {
+function saveLocalGifts() {
   localStorage.setItem(storageKey, JSON.stringify(gifts));
 }
 
-const API_URL = "https://script.google.com/macros/s/AKfycbx2-9EliCfZmTZGwgF8KL6D3eaYILfeJH-xakXGsGUNqtbE9EMElDMlIpahcX4HbN4N/exec";
+function loadReleaseCodes() {
+  const saved = localStorage.getItem(releaseCodeKey);
 
-async function fetchGifts() {
-  const response = await fetch(API_URL);
-  gifts = await response.json();
-  render();
+  if (!saved) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(saved);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
-async function updateGift(gift) {
-  await fetch(API_URL, {
-    method: "POST",
-    body: JSON.stringify(gift),
+function saveReleaseCodes() {
+  localStorage.setItem(releaseCodeKey, JSON.stringify(releaseCodes));
+}
+
+async function loadSharedGifts() {
+  if (!appConfig.apiUrl) {
+    setSyncStatus("Local preview mode");
+    render();
+    return;
+  }
+
+  await runWithSyncStatus("Loading shared registry...", async () => {
+    const result = await callRegistryApi("list");
+    applyServerResult(result);
+    setSyncStatus("Shared registry connected");
   });
+}
+
+async function callRegistryApi(action, payload = {}) {
+  if (appConfig.transport === "fetch") {
+    return callRegistryApiWithFetch(action, payload);
+  }
+
+  return callRegistryApiWithJsonp(action, payload);
+}
+
+async function callRegistryApiWithFetch(action, payload = {}) {
+  const response = await fetch(appConfig.apiUrl, {
+    method: "POST",
+    body: JSON.stringify({ action, payload }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Registry request failed with status ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.ok) {
+    throw new Error(result.error || "Registry request failed");
+  }
+
+  return result;
+}
+
+function callRegistryApiWithJsonp(action, payload = {}) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `registryCallback_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const script = document.createElement("script");
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Registry request timed out."));
+    }, 15000);
+
+    function cleanup() {
+      window.clearTimeout(timeoutId);
+      script.remove();
+      delete window[callbackName];
+    }
+
+    window[callbackName] = (result) => {
+      cleanup();
+
+      if (!result.ok) {
+        reject(new Error(result.error || "Registry request failed"));
+        return;
+      }
+
+      resolve(result);
+    };
+
+    const url = new URL(appConfig.apiUrl);
+    url.searchParams.set("action", action);
+    url.searchParams.set("payload", JSON.stringify(payload));
+    url.searchParams.set("callback", callbackName);
+    script.src = url.href;
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Registry request failed."));
+    };
+    document.body.append(script);
+  });
+}
+
+function applyServerResult(result) {
+  if (Array.isArray(result.gifts)) {
+    gifts = normalizeGifts(result.gifts);
+    saveLocalGifts();
+  }
+
+  if (result.releaseCode && result.giftId) {
+    releaseCodes[result.giftId] = result.releaseCode;
+    saveReleaseCodes();
+  }
+}
+
+async function runWithSyncStatus(label, operation) {
+  isSyncing = true;
+  setSyncStatus(label);
+  render();
+
+  try {
+    await operation();
+  } catch (error) {
+    console.error(error);
+    setSyncStatus(appConfig.apiUrl ? "Shared storage unavailable; showing saved copy" : "Local preview mode");
+  } finally {
+    isSyncing = false;
+    render();
+  }
 }
 
 function render() {
@@ -156,23 +278,22 @@ function render() {
   giftGrid.innerHTML = visibleGifts.map(createGiftCard).join("");
   emptyState.hidden = visibleGifts.length > 0;
   updateSummary();
+  updateFormState();
 }
 
 function createGiftCard(gift) {
   const isReserved = Boolean(gift.reservedBy);
-  const reserveLabel = isReserved ? "Reserved" : "Reserve Gift";
+  const canRelease = Boolean(releaseCodes[gift.id] || appConfig.adminKey);
   const normalizedLink = normalizeUrl(gift.link);
   const storeInfo = normalizedLink
-    ? `<a class="gift-link" href="${escapeHtml(normalizedLink)}" target="_blank">View gift</a>`
+    ? `<a class="gift-link" href="${escapeHtml(normalizedLink)}" target="_blank" rel="noreferrer">View gift</a>`
     : gift.link
-    ? `<span class="store-label">${escapeHtml(shortStoreLabel(gift.link))}</span>`
-    : "";
+      ? `<span class="store-label">${escapeHtml(shortStoreLabel(gift.link))}</span>`
+      : "";
   const reservation = isReserved
     ? `<p class="reserved-note">Reserved by ${escapeHtml(gift.reservedBy)}</p>`
     : "";
-  const button = isReserved
-    ? `<button class="secondary-button" data-action="release" data-id="${gift.id}" type="button">Make Available</button>`
-    : `<button class="primary-button" data-action="reserve" data-id="${gift.id}" type="button">${reserveLabel}</button>`;
+  const button = getGiftButton(gift, isReserved, canRelease);
 
   return `
     <article class="gift-card ${isReserved ? "reserved" : ""}">
@@ -191,6 +312,18 @@ function createGiftCard(gift) {
   `;
 }
 
+function getGiftButton(gift, isReserved, canRelease) {
+  if (isReserved && canRelease) {
+    return `<button class="secondary-button" data-action="release" data-id="${escapeHtml(gift.id)}" type="button">Make Available</button>`;
+  }
+
+  if (isReserved) {
+    return `<button class="secondary-button" type="button" disabled>Reserved</button>`;
+  }
+
+  return `<button class="primary-button" data-action="reserve" data-id="${escapeHtml(gift.id)}" type="button">Reserve Gift</button>`;
+}
+
 function updateSummary() {
   const reserved = gifts.filter((gift) => gift.reservedBy).length;
   const available = gifts.length - reserved;
@@ -201,10 +334,26 @@ function updateSummary() {
   document.querySelector("#totalValue").textContent = currencyFormatter.format(totalValue);
 }
 
+function updateFormState() {
+  const controls = document.querySelectorAll("button, input, select, textarea");
+  controls.forEach((control) => {
+    if (control.id === "refreshButton") {
+      control.disabled = isSyncing;
+      return;
+    }
+
+    control.disabled = isSyncing;
+  });
+}
+
+function setSyncStatus(message) {
+  syncStatus.textContent = message;
+}
+
 function openReserveDialog(giftId) {
   const gift = gifts.find((item) => item.id === giftId);
 
-  if (!gift) {
+  if (!gift || gift.reservedBy) {
     return;
   }
 
@@ -216,7 +365,7 @@ function openReserveDialog(giftId) {
   reserveDialog.showModal();
 }
 
-function reserveGift(event) {
+async function reserveGift(event) {
   event.preventDefault();
 
   if (!activeGiftId) {
@@ -231,26 +380,45 @@ function reserveGift(event) {
     return;
   }
 
-  gifts = gifts.map((gift) =>
-    gift.id === activeGiftId ? { ...gift, reservedBy: guestName, message: guestMessage } : gift
-  );
-  saveGifts();
-  render();
+  const payload = { id: activeGiftId, guestName, message: guestMessage };
   reserveDialog.close();
+
+  await saveGiftChange("reserve", payload, () => {
+    const releaseCode = createId();
+    gifts = gifts.map((gift) =>
+      gift.id === activeGiftId
+        ? { ...gift, reservedBy: guestName, message: guestMessage, releaseCode }
+        : gift
+    );
+    releaseCodes[activeGiftId] = releaseCode;
+    saveReleaseCodes();
+  });
+
+  activeGiftId = "";
 }
 
-function releaseGift(giftId) {
-  gifts = gifts.map((gift) =>
-    gift.id === giftId ? { ...gift, reservedBy: "", message: "" } : gift
+async function releaseGift(giftId) {
+  await saveGiftChange(
+    "release",
+    {
+      id: giftId,
+      releaseCode: releaseCodes[giftId] || "",
+      adminKey: appConfig.adminKey,
+    },
+    () => {
+      gifts = gifts.map((gift) =>
+        gift.id === giftId ? { ...gift, reservedBy: "", message: "", releaseCode: "" } : gift
+      );
+      delete releaseCodes[giftId];
+      saveReleaseCodes();
+    }
   );
-  saveGifts();
-  render();
 }
 
-function addGift(event) {
+async function addGift(event) {
   event.preventDefault();
 
-  const newGift = {
+  const newGift = normalizeGift({
     id: createId(),
     name: document.querySelector("#giftName").value.trim(),
     category: document.querySelector("#giftCategory").value,
@@ -259,28 +427,46 @@ function addGift(event) {
     description: document.querySelector("#giftDescription").value.trim(),
     reservedBy: "",
     message: "",
-  };
-
-  gifts = [newGift, ...gifts];
-  saveGifts();
-  giftForm.reset();
-  activeCategory = "All";
-  searchInput.value = "";
-  categoryTabs.forEach((button) => {
-    button.classList.toggle("active", button.dataset.category === "All");
   });
-  render();
+
+  if (!newGift.name || !newGift.price) {
+    return;
+  }
+
+  await saveGiftChange("add", newGift, () => {
+    gifts = [newGift, ...gifts];
+  });
+
+  giftForm.reset();
+  setActiveCategory("All");
+  searchInput.value = "";
 }
 
-function resetDemo() {
-  gifts = normalizeGifts(defaultGifts.map((gift) => ({ ...gift, id: createId() })));
-  saveGifts();
-  activeCategory = "All";
-  searchInput.value = "";
-  categoryTabs.forEach((button) => {
-    button.classList.toggle("active", button.dataset.category === "All");
+async function refreshRegistry() {
+  await loadSharedGifts();
+}
+
+async function saveGiftChange(action, payload, applyLocalChange) {
+  await runWithSyncStatus("Saving registry...", async () => {
+    if (appConfig.apiUrl) {
+      const result = await callRegistryApi(action, payload);
+      applyServerResult(result);
+      setSyncStatus("Shared registry updated");
+      return;
+    }
+
+    applyLocalChange();
+    gifts = normalizeGifts(gifts);
+    saveLocalGifts();
+    setSyncStatus("Saved in this browser");
   });
-  render();
+}
+
+function setActiveCategory(category) {
+  activeCategory = category;
+  categoryTabs.forEach((button) => {
+    button.classList.toggle("active", button.dataset.category === activeCategory);
+  });
 }
 
 function escapeHtml(value) {
@@ -301,7 +487,20 @@ function createId() {
 }
 
 function normalizeGifts(items) {
-  return items.map((gift) => ({ ...gift, link: cleanGiftLink(gift.link) }));
+  return items.map(normalizeGift);
+}
+
+function normalizeGift(gift) {
+  return {
+    id: String(gift.id || createId()),
+    name: String(gift.name || "").trim(),
+    category: String(gift.category || "Home").trim(),
+    price: Number(gift.price || 0),
+    description: String(gift.description || "").trim(),
+    link: cleanGiftLink(gift.link),
+    reservedBy: String(gift.reservedBy || "").trim(),
+    message: String(gift.message || "").trim(),
+  };
 }
 
 function cleanGiftLink(value) {
@@ -345,8 +544,7 @@ searchInput.addEventListener("input", render);
 
 categoryTabs.forEach((button) => {
   button.addEventListener("click", () => {
-    activeCategory = button.dataset.category;
-    categoryTabs.forEach((tab) => tab.classList.toggle("active", tab === button));
+    setActiveCategory(button.dataset.category);
     render();
   });
 });
@@ -376,6 +574,7 @@ reserveForm.addEventListener("click", (event) => {
 });
 
 giftForm.addEventListener("submit", addGift);
-document.querySelector("#resetDemoButton").addEventListener("click", resetDemo);
+refreshButton.addEventListener("click", refreshRegistry);
 
 render();
+loadSharedGifts();
