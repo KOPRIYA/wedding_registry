@@ -10,9 +10,11 @@ const HEADERS = [
   "reservedBy",
   "message",
   "releaseCode",
+  "reservations",
   "createdAt",
   "updatedAt",
 ];
+const MAX_RESERVATIONS_PER_GIFT = 5;
 
 const DEFAULT_GIFTS = [
   {
@@ -92,7 +94,7 @@ const DEFAULT_GIFTS = [
 function setup() {
   const spreadsheet = getSpreadsheet_();
   const sheet = getSheet_(spreadsheet);
-  seedSheetIfEmpty_(sheet);
+  ensureSheet_(sheet);
   Logger.log("Registry spreadsheet: " + spreadsheet.getUrl());
 }
 
@@ -129,7 +131,7 @@ function handleAction_(action, payload) {
   try {
     const spreadsheet = getSpreadsheet_();
     const sheet = getSheet_(spreadsheet);
-    seedSheetIfEmpty_(sheet);
+    ensureSheet_(sheet);
 
     if (action === "list") {
       return { ok: true, gifts: listGifts_(sheet) };
@@ -180,12 +182,24 @@ function getSheet_(spreadsheet) {
   return spreadsheet.getSheetByName(SHEET_NAME) || spreadsheet.insertSheet(SHEET_NAME);
 }
 
-function seedSheetIfEmpty_(sheet) {
+function ensureSheet_(sheet) {
   if (sheet.getLastRow() > 0) {
+    ensureHeaders_(sheet);
     return;
   }
 
   resetSheet_(sheet);
+}
+
+function ensureHeaders_(sheet) {
+  const headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+  const missingHeaders = HEADERS.filter((header) => headers.indexOf(header) === -1);
+
+  if (!missingHeaders.length) {
+    return;
+  }
+
+  sheet.getRange(1, headers.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
 }
 
 function resetSheet_(sheet) {
@@ -223,23 +237,30 @@ function reserveGift_(sheet, payload) {
     throw new Error("Gift not found.");
   }
 
-  const reservedBy = getCellValue_(sheet, rowInfo.rowNumber, "reservedBy");
-
-  if (reservedBy) {
-    throw new Error("This gift has already been reserved.");
-  }
-
   const guestName = String(payload.guestName || "").trim();
 
   if (!guestName) {
     throw new Error("Guest name is required.");
   }
 
+  const reservations = getRowReservations_(sheet, rowInfo.rowNumber);
+
+  if (reservations.length >= MAX_RESERVATIONS_PER_GIFT) {
+    throw new Error("This gift already has five contributors.");
+  }
+
+  if (reservations.some((reservation) => reservation.name.toLowerCase() === guestName.toLowerCase())) {
+    throw new Error("This name has already joined this gift.");
+  }
+
   const releaseCode = Utilities.getUuid();
-  setCellValue_(sheet, rowInfo.rowNumber, "reservedBy", guestName);
-  setCellValue_(sheet, rowInfo.rowNumber, "message", String(payload.message || "").trim());
-  setCellValue_(sheet, rowInfo.rowNumber, "releaseCode", releaseCode);
-  setCellValue_(sheet, rowInfo.rowNumber, "updatedAt", now_());
+  reservations.push({
+    name: guestName,
+    message: String(payload.message || "").trim(),
+    releaseCode: releaseCode,
+    createdAt: now_(),
+  });
+  setReservationCells_(sheet, rowInfo.rowNumber, reservations);
 
   return { giftId: payload.id, releaseCode };
 }
@@ -251,39 +272,63 @@ function releaseGift_(sheet, payload) {
     throw new Error("Gift not found.");
   }
 
+  const isAdmin = isAdminKey_(payload.adminKey);
   const releaseCode = String(payload.releaseCode || "").trim();
   const savedReleaseCode = String(getCellValue_(sheet, rowInfo.rowNumber, "releaseCode") || "").trim();
-  const isAdmin = isAdminKey_(payload.adminKey);
+  const reservations = getRowReservations_(sheet, rowInfo.rowNumber);
 
-  if (!isAdmin && (!releaseCode || releaseCode !== savedReleaseCode)) {
+  if (isAdmin) {
+    setReservationCells_(sheet, rowInfo.rowNumber, []);
+    return;
+  }
+
+  if (!releaseCode) {
     throw new Error("This reservation can only be released from the browser that made it.");
   }
 
-  setCellValue_(sheet, rowInfo.rowNumber, "reservedBy", "");
-  setCellValue_(sheet, rowInfo.rowNumber, "message", "");
-  setCellValue_(sheet, rowInfo.rowNumber, "releaseCode", "");
-  setCellValue_(sheet, rowInfo.rowNumber, "updatedAt", now_());
+  if (reservations.length) {
+    const remaining = reservations.filter((reservation) => reservation.releaseCode !== releaseCode);
+
+    if (remaining.length === reservations.length) {
+      throw new Error("This reservation can only be released from the browser that made it.");
+    }
+
+    setReservationCells_(sheet, rowInfo.rowNumber, remaining);
+    return;
+  }
+
+  if (releaseCode !== savedReleaseCode) {
+    throw new Error("This reservation can only be released from the browser that made it.");
+  }
+
+  setReservationCells_(sheet, rowInfo.rowNumber, []);
 }
 
 function appendGift_(sheet, gift) {
   const normalized = normalizeGift_(gift);
   const now = now_();
-  sheet.appendRow([
-    normalized.id,
-    normalized.name,
-    normalized.category,
-    normalized.price,
-    normalized.description,
-    normalized.link,
-    normalized.reservedBy,
-    normalized.message,
-    "",
-    now,
-    now,
-  ]);
+  const row = getHeaders_(sheet).map((header) => {
+    if (header === "createdAt" || header === "updatedAt") {
+      return now;
+    }
+
+    if (header === "reservations") {
+      return "[]";
+    }
+
+    if (header === "releaseCode") {
+      return "";
+    }
+
+    return Object.prototype.hasOwnProperty.call(normalized, header) ? normalized[header] : "";
+  });
+
+  sheet.appendRow(row);
 }
 
 function normalizeGift_(gift) {
+  const reservations = normalizeReservations_(gift.reservations || []);
+
   return {
     id: String(gift.id || Utilities.getUuid()).trim(),
     name: String(gift.name || "").trim(),
@@ -293,6 +338,7 @@ function normalizeGift_(gift) {
     link: String(gift.link || "").trim(),
     reservedBy: String(gift.reservedBy || "").trim(),
     message: String(gift.message || "").trim(),
+    reservations: JSON.stringify(reservations),
   };
 }
 
@@ -320,7 +366,94 @@ function rowToGift_(headers, row) {
     }
   });
 
+  const reservations = normalizeReservations_(gift.reservations || []);
+
+  if (!reservations.length && gift.reservedBy) {
+    reservations.push({
+      name: String(gift.reservedBy || "").trim(),
+      message: String(gift.message || "").trim(),
+      createdAt: String(gift.updatedAt || ""),
+    });
+  }
+
+  gift.reservations = reservations.map((reservation) => ({
+    name: reservation.name,
+    message: reservation.message,
+    createdAt: reservation.createdAt,
+  }));
+  gift.reservedBy = gift.reservations.map((reservation) => reservation.name).join(", ");
+  gift.message = gift.reservations.map((reservation) => reservation.message).filter(Boolean).join(" | ");
+
   return gift;
+}
+
+function getRowReservations_(sheet, rowNumber) {
+  const rawReservations = getCellValue_(sheet, rowNumber, "reservations");
+  const reservations = normalizeReservations_(rawReservations);
+
+  if (reservations.length) {
+    return reservations;
+  }
+
+  const reservedBy = String(getCellValue_(sheet, rowNumber, "reservedBy") || "").trim();
+
+  if (!reservedBy) {
+    return [];
+  }
+
+  return [
+    {
+      name: reservedBy,
+      message: String(getCellValue_(sheet, rowNumber, "message") || "").trim(),
+      releaseCode: String(getCellValue_(sheet, rowNumber, "releaseCode") || "").trim(),
+      createdAt: String(getCellValue_(sheet, rowNumber, "updatedAt") || "").trim(),
+    },
+  ];
+}
+
+function setReservationCells_(sheet, rowNumber, reservations) {
+  const normalized = normalizeReservations_(reservations).slice(0, MAX_RESERVATIONS_PER_GIFT);
+  const names = normalized.map((reservation) => reservation.name).join(", ");
+  const messages = normalized.map((reservation) => reservation.message).filter(Boolean).join(" | ");
+  const lastReleaseCode = normalized.length ? normalized[normalized.length - 1].releaseCode : "";
+
+  setCellValue_(sheet, rowNumber, "reservations", JSON.stringify(normalized));
+  setCellValue_(sheet, rowNumber, "reservedBy", names);
+  setCellValue_(sheet, rowNumber, "message", messages);
+  setCellValue_(sheet, rowNumber, "releaseCode", lastReleaseCode);
+  setCellValue_(sheet, rowNumber, "updatedAt", now_());
+}
+
+function normalizeReservations_(value) {
+  let items = value;
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      return [];
+    }
+
+    try {
+      items = JSON.parse(trimmed);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .map((reservation) => ({
+      name: String((reservation && (reservation.name || reservation.reservedBy)) || "").trim(),
+      message: String((reservation && reservation.message) || "").trim(),
+      releaseCode: String((reservation && reservation.releaseCode) || "").trim(),
+      createdAt: String((reservation && reservation.createdAt) || "").trim(),
+    }))
+    .filter((reservation) => reservation.name)
+    .slice(0, MAX_RESERVATIONS_PER_GIFT);
 }
 
 function getCellValue_(sheet, rowNumber, header) {
@@ -334,7 +467,7 @@ function setCellValue_(sheet, rowNumber, header, value) {
 }
 
 function getColumnNumber_(sheet, header) {
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = getHeaders_(sheet);
   const index = headers.indexOf(header);
 
   if (index === -1) {
@@ -342,6 +475,10 @@ function getColumnNumber_(sheet, header) {
   }
 
   return index + 1;
+}
+
+function getHeaders_(sheet) {
+  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 }
 
 function requireAdmin_(adminKey) {

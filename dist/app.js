@@ -99,6 +99,8 @@ const appConfig = {
 
 const storageKey = "wedding-gift-registry";
 const releaseCodeKey = "wedding-gift-release-codes";
+const defaultCategories = ["Home", "Kitchen", "Experiences", "Decor"];
+const maxReservationsPerGift = 5;
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
@@ -108,6 +110,7 @@ const currencyFormatter = new Intl.NumberFormat("en-IN", {
 let gifts = normalizeGifts(loadLocalGifts());
 let releaseCodes = loadReleaseCodes();
 let activeCategory = "All";
+let activeStatusFilter = "available";
 let activeGiftId = "";
 let isSyncing = false;
 let sharedStorageReady = !appConfig.apiUrl;
@@ -115,7 +118,9 @@ let sharedStorageReady = !appConfig.apiUrl;
 const giftGrid = document.querySelector("#giftGrid");
 const emptyState = document.querySelector("#emptyState");
 const searchInput = document.querySelector("#searchInput");
-const categoryTabs = document.querySelectorAll(".category-tabs button");
+const categoryTabs = document.querySelector("#categoryTabs");
+const categoryOptions = document.querySelector("#giftCategoryOptions");
+const registrySummary = document.querySelector(".registry-summary");
 const reserveDialog = document.querySelector("#reserveDialog");
 const reserveForm = document.querySelector("#reserveForm");
 const giftForm = document.querySelector("#giftForm");
@@ -276,13 +281,20 @@ async function runWithSyncStatus(label, failureMessage, operation) {
 }
 
 function render() {
+  if (!getCategories().includes(activeCategory)) {
+    activeCategory = "All";
+  }
+
   const query = searchInput.value.trim().toLowerCase();
   const visibleGifts = gifts.filter((gift) => {
     const matchesCategory = activeCategory === "All" || gift.category === activeCategory;
+    const matchesStatus = getStatusMatchesFilter(gift);
     const searchable = `${gift.name} ${gift.category} ${gift.description}`.toLowerCase();
-    return matchesCategory && searchable.includes(query);
+    return matchesCategory && matchesStatus && searchable.includes(query);
   });
 
+  renderCategoryTabs();
+  renderCategoryOptions();
   giftGrid.innerHTML = visibleGifts.map(createGiftCard).join("");
   emptyState.hidden = visibleGifts.length > 0;
   updateSummary();
@@ -290,27 +302,37 @@ function render() {
 }
 
 function createGiftCard(gift) {
-  const isReserved = Boolean(gift.reservedBy);
-  const canRelease = Boolean(releaseCodes[gift.id] || appConfig.adminKey);
+  const reservations = getReservations(gift);
+  const reservationCount = reservations.length;
+  const hasReservations = reservationCount > 0;
+  const canRelease = reservationCount > 0 && Boolean(releaseCodes[gift.id] || appConfig.adminKey);
   const normalizedLink = normalizeUrl(gift.link);
   const storeInfo = normalizedLink
     ? `<a class="gift-link" href="${escapeHtml(normalizedLink)}" target="_blank" rel="noreferrer">View gift</a>`
     : gift.link
       ? `<span class="store-label">${escapeHtml(shortStoreLabel(gift.link))}</span>`
       : "";
-  const reservation = isReserved
-    ? `<p class="reserved-note">Reserved by ${escapeHtml(gift.reservedBy)}</p>`
+  const reservation = hasReservations
+    ? `
+      <div class="reservation-box">
+        <p class="reserved-note">Reserved by ${escapeHtml(formatReservationNames(reservations))}</p>
+        <div class="reservation-meter" aria-label="${reservationCount} of ${maxReservationsPerGift} reservation spots filled">
+          ${Array.from({ length: maxReservationsPerGift }, (_, index) => `<span class="${index < reservationCount ? "filled" : ""}"></span>`).join("")}
+        </div>
+      </div>
+    `
     : "";
-  const button = getGiftButton(gift, isReserved, canRelease);
+  const button = getGiftButton(gift, reservationCount, canRelease);
 
   return `
-    <article class="gift-card ${isReserved ? "reserved" : ""}">
+    <article class="gift-card ${hasReservations ? "reserved" : ""}">
       <div class="gift-top">
         <span class="gift-category">${escapeHtml(gift.category)}</span>
         <span class="gift-price">${currencyFormatter.format(gift.price)}</span>
       </div>
       <h3>${escapeHtml(gift.name)}</h3>
       <p>${escapeHtml(gift.description || "A thoughtful gift for the couple.")}</p>
+      <p class="gift-capacity">${reservationCount} of ${maxReservationsPerGift} spots reserved</p>
       ${reservation}
       <div class="gift-actions">
         ${button}
@@ -320,26 +342,33 @@ function createGiftCard(gift) {
   `;
 }
 
-function getGiftButton(gift, isReserved, canRelease) {
-  if (isReserved && canRelease) {
-    return `<button class="secondary-button" data-action="release" data-id="${escapeHtml(gift.id)}" type="button">Make Available</button>`;
+function getGiftButton(gift, reservationCount, canRelease) {
+  const isFull = reservationCount >= maxReservationsPerGift;
+
+  if (canRelease) {
+    const label = appConfig.adminKey ? "Clear Reservations" : "Release My Spot";
+    return `<button class="secondary-button" data-action="release" data-id="${escapeHtml(gift.id)}" type="button">${label}</button>`;
   }
 
-  if (isReserved) {
-    return `<button class="secondary-button" type="button" disabled>Reserved</button>`;
+  if (isFull) {
+    return `<button class="secondary-button" type="button" disabled>Fully Reserved</button>`;
   }
 
-  return `<button class="primary-button" data-action="reserve" data-id="${escapeHtml(gift.id)}" type="button">Reserve Gift</button>`;
+  const label = reservationCount > 0 ? "Join Gift" : "Reserve Gift";
+  return `<button class="primary-button" data-action="reserve" data-id="${escapeHtml(gift.id)}" type="button">${label}</button>`;
 }
 
 function updateSummary() {
-  const reserved = gifts.filter((gift) => gift.reservedBy).length;
-  const available = gifts.length - reserved;
-  const totalValue = gifts.reduce((sum, gift) => sum + Number(gift.price || 0), 0);
+  const reserved = gifts.filter((gift) => getReservations(gift).length > 0).length;
+  const available = gifts.filter((gift) => getReservations(gift).length < maxReservationsPerGift).length;
 
   document.querySelector("#availableCount").textContent = available;
   document.querySelector("#reservedCount").textContent = reserved;
-  document.querySelector("#totalValue").textContent = currencyFormatter.format(totalValue);
+  document.querySelector("#totalGiftCount").textContent = gifts.length;
+
+  document.querySelectorAll(".summary-tile").forEach((tile) => {
+    tile.classList.toggle("active", tile.dataset.statusFilter === activeStatusFilter);
+  });
 }
 
 function updateFormState() {
@@ -362,15 +391,19 @@ function setSyncStatus(message, state = "info") {
 function openReserveDialog(giftId) {
   const gift = gifts.find((item) => item.id === giftId);
 
-  if (!gift || gift.reservedBy) {
+  if (!gift || getReservations(gift).length >= maxReservationsPerGift || releaseCodes[gift.id]) {
     return;
   }
 
   activeGiftId = giftId;
+  const reservationCount = getReservations(gift).length;
   document.querySelector("#dialogGiftName").textContent = gift.name;
   document.querySelector("#dialogGiftDescription").textContent = gift.description;
+  document.querySelector("#dialogGiftCapacity").textContent =
+    `${reservationCount} of ${maxReservationsPerGift} reservation spots are already taken.`;
   document.querySelector("#guestName").value = "";
   document.querySelector("#guestMessage").value = "";
+  document.querySelector("#confirmReserveButton").textContent = reservationCount > 0 ? "Join Gift" : "Reserve Gift";
   reserveDialog.showModal();
 }
 
@@ -396,7 +429,7 @@ async function reserveGift(event) {
     const releaseCode = createId();
     gifts = gifts.map((gift) =>
       gift.id === activeGiftId
-        ? { ...gift, reservedBy: guestName, message: guestMessage, releaseCode }
+        ? addReservationToGift(gift, { name: guestName, message: guestMessage, releaseCode })
         : gift
     );
     releaseCodes[activeGiftId] = releaseCode;
@@ -416,7 +449,7 @@ async function releaseGift(giftId) {
     },
     () => {
       gifts = gifts.map((gift) =>
-        gift.id === giftId ? { ...gift, reservedBy: "", message: "", releaseCode: "" } : gift
+        gift.id === giftId ? removeReservationFromGift(gift, releaseCodes[giftId] || "", Boolean(appConfig.adminKey)) : gift
       );
       delete releaseCodes[giftId];
       saveReleaseCodes();
@@ -436,6 +469,7 @@ async function addGift(event) {
     description: document.querySelector("#giftDescription").value.trim(),
     reservedBy: "",
     message: "",
+    reservations: [],
   });
 
   if (!newGift.name || !newGift.price) {
@@ -447,7 +481,8 @@ async function addGift(event) {
   });
 
   giftForm.reset();
-  setActiveCategory("All");
+  setActiveCategory(newGift.category);
+  setActiveStatusFilter("all");
   searchInput.value = "";
 }
 
@@ -479,10 +514,125 @@ async function saveGiftChange(action, payload, applyLocalChange) {
 }
 
 function setActiveCategory(category) {
-  activeCategory = category;
-  categoryTabs.forEach((button) => {
-    button.classList.toggle("active", button.dataset.category === activeCategory);
+  activeCategory = getCategories().includes(category) ? category : "All";
+  renderCategoryTabs();
+}
+
+function setActiveStatusFilter(statusFilter) {
+  activeStatusFilter = ["available", "reserved", "all"].includes(statusFilter) ? statusFilter : "available";
+}
+
+function renderCategoryTabs() {
+  const categories = getCategories();
+
+  if (!categories.includes(activeCategory)) {
+    activeCategory = "All";
+  }
+
+  categoryTabs.innerHTML = categories
+    .map(
+      (category) => `
+        <button class="${category === activeCategory ? "active" : ""}" data-category="${escapeHtml(category)}" type="button">
+          ${escapeHtml(category)}
+        </button>
+      `
+    )
+    .join("");
+}
+
+function renderCategoryOptions() {
+  categoryOptions.innerHTML = getCategories()
+    .filter((category) => category !== "All")
+    .map((category) => `<option value="${escapeHtml(category)}"></option>`)
+    .join("");
+}
+
+function getCategories() {
+  const categorySet = new Set(["All", ...defaultCategories]);
+
+  gifts.forEach((gift) => {
+    if (gift.category) {
+      categorySet.add(gift.category);
+    }
   });
+
+  return Array.from(categorySet);
+}
+
+function getStatusMatchesFilter(gift) {
+  const reservationCount = getReservations(gift).length;
+
+  if (activeStatusFilter === "available") {
+    return reservationCount < maxReservationsPerGift;
+  }
+
+  if (activeStatusFilter === "reserved") {
+    return reservationCount > 0;
+  }
+
+  return true;
+}
+
+function getReservations(gift) {
+  if (Array.isArray(gift.reservations)) {
+    return gift.reservations.map(normalizeReservation).filter((reservation) => reservation.name);
+  }
+
+  const reservedBy = String(gift.reservedBy || "").trim();
+
+  if (!reservedBy) {
+    return [];
+  }
+
+  return [
+    normalizeReservation({
+      name: reservedBy,
+      message: gift.message,
+      releaseCode: gift.releaseCode,
+    }),
+  ];
+}
+
+function normalizeReservation(reservation) {
+  return {
+    name: String(reservation?.name || reservation?.reservedBy || "").trim(),
+    message: String(reservation?.message || "").trim(),
+    releaseCode: String(reservation?.releaseCode || "").trim(),
+    createdAt: String(reservation?.createdAt || "").trim(),
+  };
+}
+
+function addReservationToGift(gift, reservation) {
+  const reservations = [...getReservations(gift), normalizeReservation(reservation)].slice(0, maxReservationsPerGift);
+  return withReservationSummary({ ...gift, reservations });
+}
+
+function removeReservationFromGift(gift, releaseCode, clearAll = false) {
+  const reservations = clearAll
+    ? []
+    : getReservations(gift).filter((reservation) => reservation.releaseCode !== releaseCode);
+  return withReservationSummary({ ...gift, reservations });
+}
+
+function withReservationSummary(gift) {
+  const reservations = getReservations(gift);
+  const messages = reservations.map((reservation) => reservation.message).filter(Boolean);
+
+  return {
+    ...gift,
+    reservations,
+    reservedBy: reservations.map((reservation) => reservation.name).join(", "),
+    message: messages.join(" | "),
+    releaseCode: "",
+  };
+}
+
+function formatReservationNames(reservations) {
+  if (reservations.length <= 3) {
+    return reservations.map((reservation) => reservation.name).join(", ");
+  }
+
+  return `${reservations.slice(0, 3).map((reservation) => reservation.name).join(", ")} and ${reservations.length - 3} more`;
 }
 
 function escapeHtml(value) {
@@ -507,7 +657,7 @@ function normalizeGifts(items) {
 }
 
 function normalizeGift(gift) {
-  return {
+  return withReservationSummary({
     id: String(gift.id || createId()),
     name: String(gift.name || "").trim(),
     category: String(gift.category || "Home").trim(),
@@ -516,7 +666,9 @@ function normalizeGift(gift) {
     link: cleanGiftLink(gift.link),
     reservedBy: String(gift.reservedBy || "").trim(),
     message: String(gift.message || "").trim(),
-  };
+    releaseCode: String(gift.releaseCode || "").trim(),
+    reservations: Array.isArray(gift.reservations) ? gift.reservations : undefined,
+  });
 }
 
 function cleanGiftLink(value) {
@@ -558,11 +710,22 @@ function shortStoreLabel(value) {
 
 searchInput.addEventListener("input", render);
 
-categoryTabs.forEach((button) => {
-  button.addEventListener("click", () => {
+categoryTabs.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-category]");
+
+  if (button) {
     setActiveCategory(button.dataset.category);
     render();
-  });
+  }
+});
+
+registrySummary.addEventListener("click", (event) => {
+  const tile = event.target.closest("[data-status-filter]");
+
+  if (tile) {
+    setActiveStatusFilter(tile.dataset.statusFilter);
+    render();
+  }
 });
 
 giftGrid.addEventListener("click", (event) => {
@@ -591,6 +754,12 @@ reserveForm.addEventListener("click", (event) => {
 
 giftForm.addEventListener("submit", addGift);
 refreshButton.addEventListener("click", refreshRegistry);
+
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) {
+    refreshRegistry();
+  }
+});
 
 render();
 loadSharedGifts();

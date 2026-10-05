@@ -31,18 +31,18 @@
       </section>
 
       <section class="registry-summary" aria-label="Registry summary">
-        <article>
+        <button class="summary-tile active" data-status-filter="available" id="availableSummaryTile" type="button">
           <span id="availableCount">0</span>
           <p>Available Gifts</p>
-        </article>
-        <article>
+        </button>
+        <button class="summary-tile" data-status-filter="reserved" id="reservedSummaryTile" type="button">
           <span id="reservedCount">0</span>
           <p>Reserved Gifts</p>
-        </article>
-        <article>
-          <span id="totalValue">0</span>
-          <p>Total Registry Value</p>
-        </article>
+        </button>
+        <button class="summary-tile" data-status-filter="all" id="allSummaryTile" type="button">
+          <span id="totalGiftCount">0</span>
+          <p>All Gift Ideas</p>
+        </button>
       </section>
 
       <section class="toolbar" aria-label="Registry controls">
@@ -51,13 +51,7 @@
           <input id="searchInput" type="search" placeholder="Dinnerware, lamp, spa..." />
         </label>
 
-        <div class="category-tabs" aria-label="Gift categories">
-          <button class="active" data-category="All" type="button">All</button>
-          <button data-category="Home" type="button">Home</button>
-          <button data-category="Kitchen" type="button">Kitchen</button>
-          <button data-category="Experiences" type="button">Experiences</button>
-          <button data-category="Decor" type="button">Decor</button>
-        </div>
+        <div class="category-tabs" id="categoryTabs" aria-label="Gift categories"></div>
       </section>
 
       <section class="content-grid">
@@ -85,12 +79,14 @@
             </label>
             <label>
               Category
-              <select id="giftCategory" required>
-                <option value="Home">Home</option>
-                <option value="Kitchen">Kitchen</option>
-                <option value="Experiences">Experiences</option>
-                <option value="Decor">Decor</option>
-              </select>
+              <input
+                id="giftCategory"
+                required
+                type="text"
+                list="giftCategoryOptions"
+                placeholder="Kitchen, Travel, Decor..."
+              />
+              <datalist id="giftCategoryOptions"></datalist>
             </label>
             <label>
               Price
@@ -122,6 +118,7 @@
         <p class="kicker">Reserve Gift</p>
         <h2 id="dialogGiftName">Gift name</h2>
         <p id="dialogGiftDescription"></p>
+        <p class="dialog-capacity" id="dialogGiftCapacity"></p>
         <label>
           Your name
           <input id="guestName" required type="text" placeholder="Priya Sharma" />
