@@ -15,6 +15,8 @@ const HEADERS = [
   "updatedAt",
 ];
 const MAX_RESERVATIONS_PER_GIFT = 5;
+const GIFTS_CACHE_KEY = "wedding-registry-gifts-v3";
+const GIFTS_CACHE_TTL_SECONDS = 60;
 
 const DEFAULT_GIFTS = [
   {
@@ -125,6 +127,19 @@ function doPost(event) {
 }
 
 function handleAction_(action, payload) {
+  if (action === "list") {
+    const cachedGifts = readCachedGifts_();
+
+    if (cachedGifts) {
+      return { ok: true, gifts: cachedGifts, cached: true };
+    }
+
+    const spreadsheet = getSpreadsheet_();
+    const sheet = getSheet_(spreadsheet);
+    ensureSheet_(sheet);
+    return { ok: true, gifts: listGifts_(sheet) };
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
 
@@ -133,23 +148,27 @@ function handleAction_(action, payload) {
     const sheet = getSheet_(spreadsheet);
     ensureSheet_(sheet);
 
-    if (action === "list") {
-      return { ok: true, gifts: listGifts_(sheet) };
-    }
-
     if (action === "add") {
-      addGift_(sheet, payload);
-      return { ok: true, gifts: listGifts_(sheet) };
+      const gift = addGift_(sheet, payload);
+      clearGiftsCache_();
+      return { ok: true, gift: gift };
     }
 
     if (action === "reserve") {
       const result = reserveGift_(sheet, payload);
-      return { ok: true, gifts: listGifts_(sheet), giftId: result.giftId, releaseCode: result.releaseCode };
+      clearGiftsCache_();
+      return {
+        ok: true,
+        gift: result.gift,
+        giftId: result.giftId,
+        releaseCode: result.releaseCode,
+      };
     }
 
     if (action === "release") {
-      releaseGift_(sheet, payload);
-      return { ok: true, gifts: listGifts_(sheet) };
+      const result = releaseGift_(sheet, payload);
+      clearGiftsCache_();
+      return { ok: true, gift: result.gift, giftId: result.giftId, released: true };
     }
 
     if (action === "reset") {
@@ -213,11 +232,14 @@ function listGifts_(sheet) {
   const values = sheet.getDataRange().getValues();
 
   if (values.length < 2) {
+    writeCachedGifts_([]);
     return [];
   }
 
   const headers = values[0];
-  return values.slice(1).map((row) => rowToGift_(headers, row));
+  const gifts = values.slice(1).map((row) => rowToGift_(headers, row));
+  writeCachedGifts_(gifts);
+  return gifts;
 }
 
 function addGift_(sheet, payload) {
@@ -228,6 +250,7 @@ function addGift_(sheet, payload) {
   }
 
   appendGift_(sheet, gift);
+  return readGiftAtRow_(sheet, sheet.getLastRow());
 }
 
 function reserveGift_(sheet, payload) {
@@ -262,7 +285,7 @@ function reserveGift_(sheet, payload) {
   });
   setReservationCells_(sheet, rowInfo.rowNumber, reservations);
 
-  return { giftId: payload.id, releaseCode };
+  return { giftId: payload.id, releaseCode: releaseCode, gift: readGiftAtRow_(sheet, rowInfo.rowNumber) };
 }
 
 function releaseGift_(sheet, payload) {
@@ -279,7 +302,7 @@ function releaseGift_(sheet, payload) {
 
   if (isAdmin) {
     setReservationCells_(sheet, rowInfo.rowNumber, []);
-    return;
+    return { giftId: payload.id, gift: readGiftAtRow_(sheet, rowInfo.rowNumber) };
   }
 
   if (!releaseCode) {
@@ -294,7 +317,7 @@ function releaseGift_(sheet, payload) {
     }
 
     setReservationCells_(sheet, rowInfo.rowNumber, remaining);
-    return;
+    return { giftId: payload.id, gift: readGiftAtRow_(sheet, rowInfo.rowNumber) };
   }
 
   if (releaseCode !== savedReleaseCode) {
@@ -302,6 +325,7 @@ function releaseGift_(sheet, payload) {
   }
 
   setReservationCells_(sheet, rowInfo.rowNumber, []);
+  return { giftId: payload.id, gift: readGiftAtRow_(sheet, rowInfo.rowNumber) };
 }
 
 function appendGift_(sheet, gift) {
@@ -385,6 +409,41 @@ function rowToGift_(headers, row) {
   gift.message = gift.reservations.map((reservation) => reservation.message).filter(Boolean).join(" | ");
 
   return gift;
+}
+
+function readGiftAtRow_(sheet, rowNumber) {
+  const headers = getHeaders_(sheet);
+  const row = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
+  return rowToGift_(headers, row);
+}
+
+function readCachedGifts_() {
+  const cached = CacheService.getScriptCache().get(GIFTS_CACHE_KEY);
+
+  if (!cached) {
+    return null;
+  }
+
+  try {
+    const gifts = JSON.parse(cached);
+    return Array.isArray(gifts) ? gifts : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeCachedGifts_(gifts) {
+  try {
+    CacheService
+      .getScriptCache()
+      .put(GIFTS_CACHE_KEY, JSON.stringify(gifts), GIFTS_CACHE_TTL_SECONDS);
+  } catch (error) {
+    // Cache entries have a size limit. The sheet remains the source of truth.
+  }
+}
+
+function clearGiftsCache_() {
+  CacheService.getScriptCache().remove(GIFTS_CACHE_KEY);
 }
 
 function getRowReservations_(sheet, rowNumber) {

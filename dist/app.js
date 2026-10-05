@@ -45,7 +45,7 @@ const defaultGifts = [
     category: "Kitchen",
     price: 6999,
     description: "So that they can make you birthday cakes, late-night cookies, and ambitious weekend baking.",
-    link: "amazon.in/Durability-Accessories-Dishwasher-Kneading-Kratos-Plus/dp/B0CX4T932R/ref=sr_1_2_sspa?adgrpid=58128411119&dib=eyJ2IjoiMSJ9.guKHDBDzmFC-7rFrWQr7AqRSUp3je-YC3cz1thBrcQuS6ewxOhGSOOMn8AuopbV0950yQpl3rQlERqj8TYyOwChjC3sj1EbIAMwl8SUWmY7UUzv9gbajqAV7r_DXAkvzZwhbvSKSvtDpwaTcNWpgoAsLSeYzaaU83yc02By-AddKvNcJjXiYWw_RZ6eT1FsoiY9iobE5d4cG-IUNMUsUosj03OawS87I_riZEWhKG44.l2v8gSCuELcdMcwo-fA_YvHYNj5MfvqSID5BQN2eOOQ&dib_tag=se&gad_source=1&hvadid=763390296434&hvdev=c&hvexpln=0&hvlocphy=1007765&hvnetw=g&hvocijid=3332950976916943811--&hvqmt=e&hvrand=3332950976916943811&hvtargid=kwd-24293601&hydadcr=10076_2260884&keywords=stand+mixer&mcid=143bc40c3a143b74b0cb321740a4127b&qid=1780655263&sr=8-2-spons&aref=L5g1IgT8SO&sp_csd=d2lkZ2V0TmFtZT1zcF9hdGY&psc=1",
+    link: "https://www.amazon.in/Durability-Accessories-Dishwasher-Kneading-Kratos-Plus/dp/B0CX4T932R/",
     reservedBy: "",
     message: "",
   },
@@ -55,7 +55,7 @@ const defaultGifts = [
     category: "Home",
     price: 42990,
     description: "So that the couple saves time.",
-    link: "https://www.amazon.in/Setting-Dishwasher-Intensive-Program-Pre-Rinse/dp/B07JW77MVJ/ref=sr_1_4?crid=P7ECHD6C035V&dib=eyJ2IjoiMSJ9.kwk3FnNlSg4w3jtvxq5yTePRhw581eTPCrJqKGB1T_WNB9DGWfNA7riGTk5A1KlwjX1_--KFQpwd2l7ddmaPSfdMEyIMlqXhh57P1WrBASwt7t9QTtRDPHN_unXrpvAmptENhCMgblGtI8Pva39Bbn2QaZqwzOHB1lxfMG4QeibqnRiockW-WAvI9kBT2ejtiB13OSOCx3x19eHBs3oPitPxSJFtoaLhfxovzWiM43Y.icxT94YEeNtWERfJGfQUZTPNLS7XsnD7WNyd3Nm9Xsw&dib_tag=se&keywords=dish+washer+for+home&qid=1780655341&sprefix=dish+%2Caps%2C326&sr=8-4",
+    link: "https://www.amazon.in/Setting-Dishwasher-Intensive-Program-Pre-Rinse/dp/B07JW77MVJ/",
     reservedBy: "",
     message: "",
   },
@@ -65,7 +65,7 @@ const defaultGifts = [
     category: "Kitchen",
     price: 19999,
     description: "A coffee maker for the coffee lovers.",
-    link: "https://www.amazon.in/DeLonghi-Dedica-Compact-Espresso-machine/dp/B0F3S1JJ4T?ref_=ast_sto_dp&th=1",
+    link: "https://www.amazon.in/DeLonghi-Dedica-Compact-Espresso-machine/dp/B0F3S1JJ4T",
     reservedBy: "",
     message: "",
   },
@@ -85,7 +85,7 @@ const defaultGifts = [
     category: "Home",
     price: 29999,
     description: "So that the couple can stay fit.",
-    link: "https://www.amazon.in/Flexnest-Flexpad-Foldable-Treadmill-Bluetooth/dp/B0F6VB8Y26/ref=sr_1_2_sspa?crid=36M9ME7WR48JQ&dib=eyJ2IjoiMSJ9.ULbrOQ3WKQ__mw8Wr2-OOBO4iv_qJQ4pItgZ8YBB9-olPeKrBWrwPkvbrZuoqeCQqVbAab0KOeUWsXH_AJTj14Z4EhbcP_SDHJ8BCSacEAeIGr4qf2V1lFbRHflgABwvE6a5Cd0CnFIuFeMcRADiBDHWbaL_RKGlHj7B7VGTmSS9pAKlTj5O7c1AtMVKRVPvtvY3tmHwMOD67WjaHPVuuvLqEBv1bcp1ISqbE4g8ckw.AOXclQerCWM3W8U-uMnMqxblJhbPQMMZwbXkzAn7ZlM&dib_tag=se&keywords=walking+pad+with+incline&qid=1780682519&sprefix=walking+pad%2Caps%2C267&sr=8-2-spons&aref=yTOGaGSY3T&sp_csd=d2lkZ2V0TmFtZT1zcF9hdGY&psc=1",
+    link: "https://www.amazon.in/Flexnest-Flexpad-Foldable-Treadmill-Bluetooth/dp/B0F6VB8Y26/",
     reservedBy: "",
     message: "",
   },
@@ -112,7 +112,8 @@ let releaseCodes = loadReleaseCodes();
 let activeCategory = "All";
 let activeStatusFilter = "available";
 let activeGiftId = "";
-let isSyncing = false;
+let isRefreshing = false;
+let latestLoadRequest = 0;
 let sharedStorageReady = !appConfig.apiUrl;
 
 const giftGrid = document.querySelector("#giftGrid");
@@ -173,12 +174,32 @@ async function loadSharedGifts() {
     return;
   }
 
-  await runWithSyncStatus("Loading shared registry...", "Google storage needs public access. Changes are not saved yet.", async () => {
+  const requestId = latestLoadRequest + 1;
+  latestLoadRequest = requestId;
+  isRefreshing = true;
+  setSyncStatus("Refreshing shared registry...", "info");
+  updateFormState();
+
+  try {
     const result = await callRegistryApi("list");
+
+    if (requestId !== latestLoadRequest) {
+      return;
+    }
+
     applyServerResult(result);
     sharedStorageReady = true;
     setSyncStatus("Shared registry connected", "ok");
-  });
+  } catch (error) {
+    console.error(error);
+    sharedStorageReady = false;
+    setSyncStatus("Showing saved copy. Shared registry refresh is slow or unavailable.", "error");
+  } finally {
+    if (requestId === latestLoadRequest) {
+      isRefreshing = false;
+      render();
+    }
+  }
 }
 
 async function callRegistryApi(action, payload = {}) {
@@ -253,30 +274,13 @@ function applyServerResult(result) {
     saveLocalGifts();
   }
 
+  if (result.gift) {
+    upsertGift(result.gift);
+  }
+
   if (result.releaseCode && result.giftId) {
     releaseCodes[result.giftId] = result.releaseCode;
     saveReleaseCodes();
-  }
-}
-
-async function runWithSyncStatus(label, failureMessage, operation) {
-  isSyncing = true;
-  setSyncStatus(label, "info");
-  render();
-
-  try {
-    await operation();
-  } catch (error) {
-    console.error(error);
-    if (appConfig.apiUrl) {
-      sharedStorageReady = false;
-      setSyncStatus(failureMessage || "Shared storage unavailable; showing saved copy", "error");
-    } else {
-      setSyncStatus("Local preview mode", "info");
-    }
-  } finally {
-    isSyncing = false;
-    render();
   }
 }
 
@@ -372,15 +376,8 @@ function updateSummary() {
 }
 
 function updateFormState() {
-  const controls = document.querySelectorAll("button, input, select, textarea");
-  controls.forEach((control) => {
-    if (control.id === "refreshButton") {
-      control.disabled = isSyncing;
-      return;
-    }
-
-    control.disabled = isSyncing;
-  });
+  refreshButton.disabled = isRefreshing;
+  refreshButton.textContent = isRefreshing ? "Refreshing..." : "Refresh Registry";
 }
 
 function setSyncStatus(message, state = "info") {
@@ -425,7 +422,7 @@ async function reserveGift(event) {
   const payload = { id: activeGiftId, guestName, message: guestMessage };
   reserveDialog.close();
 
-  await saveGiftChange("reserve", payload, () => {
+  saveGiftChange("reserve", payload, () => {
     const releaseCode = createId();
     gifts = gifts.map((gift) =>
       gift.id === activeGiftId
@@ -440,7 +437,7 @@ async function reserveGift(event) {
 }
 
 async function releaseGift(giftId) {
-  await saveGiftChange(
+  saveGiftChange(
     "release",
     {
       id: giftId,
@@ -476,7 +473,7 @@ async function addGift(event) {
     return;
   }
 
-  await saveGiftChange("add", newGift, () => {
+  saveGiftChange("add", newGift, () => {
     gifts = [newGift, ...gifts];
   });
 
@@ -491,26 +488,36 @@ async function refreshRegistry() {
 }
 
 async function saveGiftChange(action, payload, applyLocalChange) {
-  if (appConfig.apiUrl && !sharedStorageReady) {
-    setSyncStatus("Cannot save yet: Google storage is not public.", "error");
-    render();
+  const previousGifts = gifts;
+  const previousReleaseCodes = { ...releaseCodes };
+
+  applyLocalChange();
+  gifts = normalizeGifts(gifts);
+  saveLocalGifts();
+  render();
+
+  if (!appConfig.apiUrl) {
+    setSyncStatus("Saved in this browser", "ok");
     return;
   }
 
-  await runWithSyncStatus("Saving registry...", "Could not save. Check Google Apps Script access.", async () => {
-    if (appConfig.apiUrl) {
-      const result = await callRegistryApi(action, payload);
-      applyServerResult(result);
-      sharedStorageReady = true;
-      setSyncStatus("Shared registry updated", "ok");
-      return;
-    }
+  setSyncStatus("Saving to shared registry...", "info");
 
-    applyLocalChange();
-    gifts = normalizeGifts(gifts);
+  try {
+    const result = await callRegistryApi(action, payload);
+    applyServerResult(result);
+    sharedStorageReady = true;
+    setSyncStatus("Shared registry updated", "ok");
+  } catch (error) {
+    console.error(error);
+    gifts = previousGifts;
+    releaseCodes = previousReleaseCodes;
     saveLocalGifts();
-    setSyncStatus("Saved in this browser", "ok");
-  });
+    saveReleaseCodes();
+    setSyncStatus("Save failed. Your change was not kept; please try again.", "error");
+  } finally {
+    render();
+  }
 }
 
 function setActiveCategory(category) {
@@ -654,6 +661,16 @@ function createId() {
 
 function normalizeGifts(items) {
   return items.map(normalizeGift);
+}
+
+function upsertGift(gift) {
+  const normalizedGift = normalizeGift(gift);
+  const existingGift = gifts.some((item) => item.id === normalizedGift.id);
+
+  gifts = existingGift
+    ? gifts.map((item) => (item.id === normalizedGift.id ? normalizedGift : item))
+    : [normalizedGift, ...gifts];
+  saveLocalGifts();
 }
 
 function normalizeGift(gift) {
