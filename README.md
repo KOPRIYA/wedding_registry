@@ -1,6 +1,6 @@
 # Wedding Registry
 
-A small public wedding registry web app for Mithu & Atin. Guests can browse gifts, suggest gifts, and reserve a gift. Shared data can be stored for free in a Google Sheet through Google Apps Script.
+A small public wedding registry web app for Mitthu & Atin. Guests can browse gifts, suggest gifts, and reserve a gift. Shared data can be stored for free in a Google Sheet through Google Apps Script.
 
 ## Run Locally
 

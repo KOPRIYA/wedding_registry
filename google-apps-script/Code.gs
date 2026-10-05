@@ -192,7 +192,7 @@ function getSpreadsheet_() {
   }
 
   const active = SpreadsheetApp.getActiveSpreadsheet();
-  const spreadsheet = active || SpreadsheetApp.create("Mithu and Atin Wedding Registry");
+  const spreadsheet = active || SpreadsheetApp.create("Mitthu and Atin Wedding Registry");
   properties.setProperty("REGISTRY_SPREADSHEET_ID", spreadsheet.getId());
   return spreadsheet;
 }
